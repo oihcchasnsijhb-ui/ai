@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">JARVIS</string>
+    <string name="placeholder_ai_banner_title">Placeholder AI Mode</string>
+    <string name="placeholder_ai_banner_body">Live Gemini responses require Firebase AI Logic. ChatGPT and Claude use AI Studio Secrets when configured; otherwise sample previews are shown.</string>
+    <string name="nav_companion">Chat</string>
+    <string name="nav_tools">AI Tools</string>
+    <string name="nav_agents">Team</string>
+    <string name="nav_studio">Studio</string>
+    <string name="nav_core">Memory</string>
+    <string name="cd_jarvis_avatar">JARVIS core avatar</string>
+    <string name="cd_jarvis_banner">JARVIS command center banner</string>
+    <string name="cd_send_command">Send message to JARVIS</string>
+    <string name="cd_new_thread">Start new conversation</string>
+    <string name="cd_thread_history">Open conversation history</string>
+    <string name="cd_copy_code">Copy code snippet</string>
+    <string name="cd_add_task">Add planner task</string>
+    <string name="cd_add_mission">Launch multi-agent mission</string>
+    <string name="cd_add_memory">Add memory entry</string>
+    <string name="cd_delete_item">Delete item</string>
+    <string name="cd_share_draft">Share approved draft</string>
+    <string name="cd_run_ai_tool">Run AI tool</string>
+    <string name="composer_placeholder">Ask Gemini, Claude, or ChatGPT…</string>
+    <string name="error_empty_input">Please enter a command or message first.</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+</resources>

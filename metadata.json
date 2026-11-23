@@ -1,0 +1,6 @@
+{
+  "name": "JARVIS",
+  "description": "Autonomous AI companion, multi-agent task orchestrator, software engineering assistant, and personal planner with persistent memory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
