@@ -84,3 +84,18 @@ interface MemoryDao {
     @Query("DELETE FROM memory_entries WHERE id = :id")
     suspend fun deleteMemory(id: Long)
 }
+
+@Dao
+interface CreatorPackDao {
+    @Query("SELECT * FROM creator_packs ORDER BY updatedAt DESC")
+    fun observeCreatorPacks(): Flow<List<CreatorPackEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCreatorPack(pack: CreatorPackEntity): Long
+
+    @Update
+    suspend fun updateCreatorPack(pack: CreatorPackEntity)
+
+    @Query("DELETE FROM creator_packs WHERE id = :id")
+    suspend fun deleteCreatorPack(id: Long)
+}

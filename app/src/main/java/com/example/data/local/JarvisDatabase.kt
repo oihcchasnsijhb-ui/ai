@@ -11,9 +11,10 @@ import androidx.room.RoomDatabase
         ChatMessageEntity::class,
         AgentMissionEntity::class,
         PlannerTaskEntity::class,
-        MemoryEntryEntity::class
+        MemoryEntryEntity::class,
+        CreatorPackEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class JarvisDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class JarvisDatabase : RoomDatabase() {
     abstract fun agentMissionDao(): AgentMissionDao
     abstract fun plannerTaskDao(): PlannerTaskDao
     abstract fun memoryDao(): MemoryDao
+    abstract fun creatorPackDao(): CreatorPackDao
 
     companion object {
         @Volatile

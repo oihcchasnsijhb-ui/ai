@@ -5,12 +5,15 @@ import com.example.data.ai.AiRepository
 import com.example.data.ai.AiResponse
 import com.example.data.ai.AiStreamEvent
 import com.example.data.ai.AiToolKind
+import com.example.data.ai.CreatorDraftPayload
+import com.example.data.ai.CreatorPlatform
 import com.example.data.ai.JarvisLanguage
 import com.example.data.ai.JarvisTone
 import com.example.data.ai.SpecialistAgent
 import com.example.data.local.AgentMissionEntity
 import com.example.data.local.ChatMessageEntity
 import com.example.data.local.ConversationEntity
+import com.example.data.local.CreatorPackEntity
 import com.example.data.local.JarvisDatabase
 import com.example.data.local.JarvisPreferences
 import com.example.data.local.MemoryEntryEntity
@@ -33,6 +36,7 @@ class JarvisWorkspaceRepository(
     val missionsFlow: Flow<List<AgentMissionEntity>> = db.agentMissionDao().observeMissions()
     val plannerTasksFlow: Flow<List<PlannerTaskEntity>> = db.plannerTaskDao().observeTasks()
     val memoriesFlow: Flow<List<MemoryEntryEntity>> = db.memoryDao().observeMemories()
+    val creatorPacksFlow: Flow<List<CreatorPackEntity>> = db.creatorPackDao().observeCreatorPacks()
     val studioArtifactsFlow: Flow<List<ChatMessageEntity>> = db.chatMessageDao().observeStudioArtifacts()
 
     fun observeMessages(conversationId: Long): Flow<List<ChatMessageEntity>> =
@@ -41,7 +45,7 @@ class JarvisWorkspaceRepository(
     suspend fun createConversation(title: String, languageHint: String = "AUTO"): Long {
         return db.conversationDao().insertConversation(
             ConversationEntity(
-                title = title.take(48).ifBlank { "New JARVIS Session" },
+                title = title.take(48).ifBlank { "New AIRA Session" },
                 languageHint = languageHint
             )
         )
@@ -98,14 +102,14 @@ class JarvisWorkspaceRepository(
         language: JarvisLanguage
     ): Map<AiEngine, AiResponse> = aiRepository.compareAllEngines(prompt, language)
 
-    suspend fun saveJarvisReply(conversationId: Long, response: AiResponse) {
+    suspend fun saveAiraReply(conversationId: Long, response: AiResponse) {
         val tasksEncoded = response.suggestedPlannerTasks.joinToString(";;") { (time, title) ->
             "${time.replace("|", " ")}|${title.replace("|", " ")}"
         }
         db.chatMessageDao().insertMessage(
             ChatMessageEntity(
                 conversationId = conversationId,
-                sender = "JARVIS",
+                sender = "AIRA",
                 content = response.replyText,
                 codeSnippet = response.codeSnippet,
                 codeLanguage = response.codeLanguage,
@@ -121,6 +125,50 @@ class JarvisWorkspaceRepository(
         )
     }
 
+    suspend fun saveCreatorPackFromDraft(draft: CreatorDraftPayload) {
+        val steps = defaultStepsForPlatform(draft.platform).joinToString(";;") { "0|$it" }
+        db.creatorPackDao().insertCreatorPack(
+            CreatorPackEntity(
+                platform = draft.platform.name,
+                topic = draft.topic,
+                title = draft.title,
+                hook = draft.hook,
+                script = draft.script,
+                captionOrDescription = draft.captionOrDescription,
+                tagsOrHashtags = draft.tagsOrHashtags,
+                stepsEncoded = steps
+            )
+        )
+    }
+
+    suspend fun createCreatorPack(platform: CreatorPlatform, topic: String, engine: AiEngine, language: JarvisLanguage) {
+        val response = aiRepository.runAiTool(
+            tool = AiToolKind.VIDEO_STUDIO,
+            engine = engine,
+            input = topic,
+            option = platform.label,
+            language = language
+        )
+        val draft = response.creatorDraft ?: CreatorDraftPayload(
+            platform = platform,
+            topic = topic,
+            title = topic.take(50),
+            hook = "Opening 5-second hook for $topic",
+            script = response.replyText,
+            captionOrDescription = topic,
+            tagsOrHashtags = "#AIRA #Creator"
+        )
+        saveCreatorPackFromDraft(draft.copy(platform = platform))
+    }
+
+    suspend fun updateCreatorPack(pack: CreatorPackEntity) {
+        db.creatorPackDao().updateCreatorPack(pack.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun deleteCreatorPack(id: Long) {
+        db.creatorPackDao().deleteCreatorPack(id)
+    }
+
     suspend fun updateDraft(messageId: Long, newBody: String, status: String) {
         db.chatMessageDao().updateDraft(messageId, newBody, status)
     }
@@ -131,7 +179,7 @@ class JarvisWorkspaceRepository(
                 PlannerTaskEntity(
                     title = title,
                     timeSlot = time,
-                    category = "JARVIS Plan",
+                    category = "AIRA Plan",
                     priority = "HIGH"
                 )
             )
@@ -217,8 +265,38 @@ class JarvisWorkspaceRepository(
     }
 
     suspend fun setMemoryEnabled(enabled: Boolean) = preferencesRepository.setMemoryEnabled(enabled)
+    suspend fun setProactiveAssistanceEnabled(enabled: Boolean) = preferencesRepository.setProactiveAssistanceEnabled(enabled)
+    suspend fun setVoiceAutoSpeak(enabled: Boolean) = preferencesRepository.setVoiceAutoSpeak(enabled)
     suspend fun setPreferredLanguage(language: JarvisLanguage) = preferencesRepository.setPreferredLanguage(language)
     suspend fun setPersonalityTone(tone: JarvisTone) = preferencesRepository.setPersonalityTone(tone)
     suspend fun setThemeMode(mode: ThemeMode) = preferencesRepository.setThemeMode(mode)
     suspend fun setSelectedEngine(engine: AiEngine) = preferencesRepository.setSelectedEngine(engine)
+
+    private fun defaultStepsForPlatform(platform: CreatorPlatform): List<String> = when (platform) {
+        CreatorPlatform.YOUTUBE_VIDEO -> listOf(
+            "Approve concept, hook & script",
+            "Generate scenes, voice-over & captions",
+            "Design high-CTR thumbnail",
+            "Review title, description, tags & visibility",
+            "Export & upload via authorized YouTube Studio"
+        )
+        CreatorPlatform.YOUTUBE_SHORTS -> listOf(
+            "Verify 3-sec hook & vertical 9:16 pacing",
+            "Add captions, music & transitions",
+            "Finalize #Shorts title & tags",
+            "Export & upload to YouTube Shorts"
+        )
+        CreatorPlatform.INSTAGRAM_REEL -> listOf(
+            "Approve 9:16 visual hook & script",
+            "Prepare subtitles, audio & cover frame",
+            "Finalize caption & niche hashtags",
+            "Review & publish/schedule via Instagram"
+        )
+        CreatorPlatform.INSTAGRAM_CAROUSEL -> listOf(
+            "Outline slide-by-slide design",
+            "Create cover graphic & CTA slide",
+            "Finalize caption & hashtags",
+            "Review quality & publish"
+        )
+    }
 }

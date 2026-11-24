@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,11 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.FolderCopy
+import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -54,13 +58,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.data.ai.CreatorPlatform
+import com.example.data.local.CreatorPackEntity
 import com.example.data.local.PlannerTaskEntity
 import com.example.ui.JarvisUiState
+import com.example.ui.JarvisViewModel
 import com.example.ui.components.CodeBlockCard
 import com.example.ui.components.FirebasePlaceholderBanner
 import com.example.ui.components.StatusPill
+import com.example.ui.components.copyTextToClipboard
 import com.example.ui.components.shareDraftIntent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,10 +79,14 @@ fun StudioScreen(
     onAddTask: (String, String, String, String) -> Unit,
     onToggleTask: (PlannerTaskEntity) -> Unit,
     onDeleteTask: (Long) -> Unit,
+    onCreateCreatorPack: (CreatorPlatform, String) -> Unit,
+    onToggleCreatorStep: (CreatorPackEntity, Int) -> Unit,
+    onDeleteCreatorPack: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Planner, 1 = Drafts & Code
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Planner, 1 = Creator, 2 = Drafts & Code
     var showAddTaskSheet by remember { mutableStateOf(false) }
+    var showAddCreatorSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Box(
@@ -92,179 +105,193 @@ fun StudioScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Personal Studio",
+                    text = "AIRA Studio",
                     style = MaterialTheme.typography.headlineMedium
                 )
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     SegmentedButton(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                         modifier = Modifier.testTag("studio_tab_planner")
                     ) {
-                        Text("Daily Planner (${uiState.plannerTasks.size})")
+                        Text("Planner (${uiState.plannerTasks.size})", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     SegmentedButton(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                        modifier = Modifier.testTag("studio_tab_creator")
+                    ) {
+                        Text("Creator (${uiState.creatorPacks.size})", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    SegmentedButton(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                         modifier = Modifier.testTag("studio_tab_artifacts")
                     ) {
-                        Text("Drafts & Code (${uiState.studioArtifacts.size})")
+                        Text("Code/Drafts", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
 
-            if (selectedTab == 0) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (uiState.plannerTasks.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.EventNote,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Text(
-                                        text = "Your Planner Is Clear",
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Text(
-                                        text = "Add tasks manually or ask JARVIS in Companion: \"आज मेरा पूरा दिन प्लान कर दो।\" to generate a full schedule.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+            when (selectedTab) {
+                0 -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (uiState.plannerTasks.isEmpty()) {
+                            item {
+                                EmptyStudioCard(
+                                    icon = Icons.Filled.EventNote,
+                                    title = "Your Planner Is Clear",
+                                    body = "Add tasks manually or ask AIRA in Chat: \"आज मेरा पूरा दिन प्लान कर दो।\" to build a schedule."
+                                )
+                            }
+                        } else {
+                            items(uiState.plannerTasks, key = { it.id }) { task ->
+                                PlannerTaskCard(
+                                    task = task,
+                                    onToggle = { onToggleTask(task) },
+                                    onDelete = { onDeleteTask(task.id) }
+                                )
                             }
                         }
-                    } else {
-                        items(uiState.plannerTasks, key = { it.id }) { task ->
-                            PlannerTaskCard(
-                                task = task,
-                                onToggle = { onToggleTask(task) },
-                                onDelete = { onDeleteTask(task.id) }
+                        item { Spacer(Modifier.height(72.dp)) }
+                    }
+                }
+
+                1 -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            FirebasePlaceholderBanner(
+                                selectedEngine = uiState.preferences.selectedEngine,
+                                isSelectedEngineLive = uiState.preferences.selectedEngine in uiState.liveEngines
                             )
                         }
-                    }
-                    item { Spacer(Modifier.height(72.dp)) }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (!uiState.isLiveAiConnected) {
-                        item { FirebasePlaceholderBanner() }
-                    }
-
-                    if (uiState.studioArtifacts.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.FolderCopy,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Text(
-                                        text = "No Drafts or Code Saved Yet",
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Text(
-                                        text = "Ask JARVIS to write Kotlin code or draft a WhatsApp/Email message — generated artifacts collect here automatically.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                        if (uiState.creatorPacks.isEmpty()) {
+                            item {
+                                EmptyStudioCard(
+                                    icon = Icons.Filled.MovieCreation,
+                                    title = "Video, YouTube & Instagram Studio",
+                                    body = "Create hooks, scripts, YouTube titles/tags, and Instagram Reel workflows. Note: direct video rendering & auto-upload require authorized platform APIs."
+                                )
+                            }
+                        } else {
+                            items(uiState.creatorPacks, key = { it.id }) { pack ->
+                                CreatorPackCard(
+                                    pack = pack,
+                                    onToggleStep = { idx -> onToggleCreatorStep(pack, idx) },
+                                    onCopyAll = {
+                                        val export = buildString {
+                                            appendLine("Platform: ${pack.platform}")
+                                            appendLine("Title: ${pack.title}")
+                                            appendLine("Hook: ${pack.hook}")
+                                            appendLine()
+                                            appendLine("Script:\n${pack.script}")
+                                            appendLine()
+                                            appendLine("Caption / Description:\n${pack.captionOrDescription}")
+                                            appendLine()
+                                            appendLine("Tags / Hashtags: ${pack.tagsOrHashtags}")
+                                        }
+                                        copyTextToClipboard(context, export)
+                                    },
+                                    onShare = {
+                                        shareDraftIntent(
+                                            context,
+                                            pack.platform,
+                                            "${pack.title}\n\n${pack.captionOrDescription}\n\n${pack.tagsOrHashtags}"
+                                        )
+                                    },
+                                    onDelete = { onDeleteCreatorPack(pack.id) }
+                                )
                             }
                         }
-                    } else {
-                        items(uiState.studioArtifacts, key = { it.id }) { artifact ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        item { Spacer(Modifier.height(72.dp)) }
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (uiState.studioArtifacts.isEmpty()) {
+                            item {
+                                EmptyStudioCard(
+                                    icon = Icons.Filled.FolderCopy,
+                                    title = "No Drafts or Code Saved Yet",
+                                    body = "Ask AIRA to write Kotlin code or draft a WhatsApp/Email message — generated artifacts collect here automatically."
+                                )
+                            }
+                        } else {
+                            items(uiState.studioArtifacts, key = { it.id }) { artifact ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
                                 ) {
-                                    if (!artifact.codeSnippet.isNullOrBlank()) {
-                                        Text(
-                                            text = "Generated Code Snippet",
-                                            style = MaterialTheme.typography.titleSmall
-                                        )
-                                        CodeBlockCard(
-                                            code = artifact.codeSnippet,
-                                            language = artifact.codeLanguage
-                                        )
-                                    }
-                                    if (!artifact.draftBody.isNullOrBlank() && !artifact.draftChannel.isNullOrBlank()) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        if (!artifact.codeSnippet.isNullOrBlank()) {
                                             Text(
-                                                text = "${artifact.draftChannel} Draft",
+                                                text = "Generated Code Snippet",
                                                 style = MaterialTheme.typography.titleSmall
                                             )
-                                            StatusPill(
-                                                label = artifact.draftStatus?.replace("_", " ") ?: "DRAFT",
-                                                color = MaterialTheme.colorScheme.secondary
+                                            CodeBlockCard(
+                                                code = artifact.codeSnippet,
+                                                language = artifact.codeLanguage
                                             )
                                         }
-                                        Text(
-                                            text = artifact.draftBody,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        OutlinedButton(
-                                            onClick = {
-                                                shareDraftIntent(
-                                                    context,
-                                                    artifact.draftChannel,
-                                                    artifact.draftBody
+                                        if (!artifact.draftBody.isNullOrBlank() && !artifact.draftChannel.isNullOrBlank()) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${artifact.draftChannel} Draft",
+                                                    style = MaterialTheme.typography.titleSmall
                                                 )
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .minimumInteractiveComponentSize()
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Share,
-                                                contentDescription = stringResource(R.string.cd_share_draft),
-                                                modifier = Modifier.size(16.dp)
+                                                StatusPill(
+                                                    label = artifact.draftStatus?.replace("_", " ") ?: "DRAFT",
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                            Text(
+                                                text = artifact.draftBody,
+                                                style = MaterialTheme.typography.bodyMedium
                                             )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("Share via Android")
+                                            OutlinedButton(
+                                                onClick = {
+                                                    shareDraftIntent(
+                                                        context,
+                                                        artifact.draftChannel,
+                                                        artifact.draftBody
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .minimumInteractiveComponentSize()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Share,
+                                                    contentDescription = stringResource(R.string.cd_share_draft),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("Share via Android")
+                                            }
                                         }
                                     }
                                 }
@@ -275,19 +302,23 @@ fun StudioScreen(
             }
         }
 
-        if (selectedTab == 0) {
+        if (selectedTab == 0 || selectedTab == 1) {
             FloatingActionButton(
-                onClick = { showAddTaskSheet = true },
+                onClick = {
+                    if (selectedTab == 0) showAddTaskSheet = true else showAddCreatorSheet = true
+                },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
-                    .testTag("fab_add_planner_task"),
+                    .testTag(if (selectedTab == 0) "fab_add_planner_task" else "fab_add_creator_pack"),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.cd_add_task)
+                    contentDescription = stringResource(
+                        if (selectedTab == 0) R.string.cd_add_task else R.string.cd_add_creator_pack
+                    )
                 )
             }
         }
@@ -361,6 +392,231 @@ fun StudioScreen(
                     Text("Save Task")
                 }
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+
+    if (showAddCreatorSheet) {
+        var platform by remember { mutableStateOf(CreatorPlatform.YOUTUBE_VIDEO) }
+        var topic by remember { mutableStateOf("") }
+
+        ModalBottomSheet(onDismissRequest = { showAddCreatorSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("New YouTube / Instagram Project", style = MaterialTheme.typography.headlineSmall)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CreatorPlatform.entries.forEach { p ->
+                        FilterChip(
+                            selected = platform == p,
+                            onClick = { platform = p },
+                            label = { Text(p.label) },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = topic,
+                    onValueChange = { topic = it },
+                    label = { Text("Video / Reel Topic") },
+                    placeholder = { Text("e.g., 5 AI habits for daily productivity") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("creator_topic_input"),
+                    minLines = 2
+                )
+                Button(
+                    onClick = {
+                        if (topic.isNotBlank()) {
+                            onCreateCreatorPack(platform, topic)
+                            showAddCreatorSheet = false
+                        }
+                    },
+                    enabled = topic.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .testTag("save_creator_pack_button")
+                ) {
+                    Text("Generate Production Pack")
+                }
+                Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyStudioCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    body: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun CreatorPackCard(
+    pack: CreatorPackEntity,
+    onToggleStep: (Int) -> Unit,
+    onCopyAll: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val steps = remember(pack.stepsEncoded) { JarvisViewModel.parseMilestones(pack.stepsEncoded) }
+    val platformLabel = remember(pack.platform) {
+        CreatorPlatform.entries.firstOrNull { it.name == pack.platform }?.label ?: pack.platform
+    }
+    val statusColor = if (pack.status == "READY_TO_PUBLISH") {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.secondary
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("creator_pack_${pack.id}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusPill(label = platformLabel, color = MaterialTheme.colorScheme.primary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusPill(label = pack.status.replace("_", " "), color = statusColor)
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DeleteOutline,
+                            contentDescription = stringResource(R.string.cd_delete_item),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Text(text = pack.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Hook: ${pack.hook}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+            Text(
+                text = pack.script,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "${pack.captionOrDescription}\n${pack.tagsOrHashtags}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (steps.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "PRODUCTION WORKFLOW",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    steps.forEachIndexed { idx, step ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleStep(idx) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = step.isDone,
+                                onCheckedChange = { onToggleStep(idx) }
+                            )
+                            Text(
+                                text = step.title,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    textDecoration = if (step.isDone) TextDecoration.LineThrough else TextDecoration.None
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCopyAll,
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Copy Pack")
+                }
+                Button(
+                    onClick = onShare,
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = stringResource(R.string.cd_share_draft),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Share Metadata")
+                }
             }
         }
     }

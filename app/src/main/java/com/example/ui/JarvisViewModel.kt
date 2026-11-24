@@ -8,6 +8,8 @@ import com.example.data.ai.AiEngine
 import com.example.data.ai.AiResponse
 import com.example.data.ai.AiStreamEvent
 import com.example.data.ai.AiToolKind
+import com.example.data.ai.CreatorDraftPayload
+import com.example.data.ai.CreatorPlatform
 import com.example.data.ai.JarvisLanguage
 import com.example.data.ai.JarvisTone
 import com.example.data.ai.MultiEngineAiRepository
@@ -15,6 +17,7 @@ import com.example.data.ai.SpecialistAgent
 import com.example.data.local.AgentMissionEntity
 import com.example.data.local.ChatMessageEntity
 import com.example.data.local.ConversationEntity
+import com.example.data.local.CreatorPackEntity
 import com.example.data.local.JarvisDatabase
 import com.example.data.local.JarvisPreferences
 import com.example.data.local.MemoryEntryEntity
@@ -50,11 +53,13 @@ data class JarvisUiState(
     val missions: List<AgentMissionEntity> = emptyList(),
     val plannerTasks: List<PlannerTaskEntity> = emptyList(),
     val memories: List<MemoryEntryEntity> = emptyList(),
+    val creatorPacks: List<CreatorPackEntity> = emptyList(),
     val studioArtifacts: List<ChatMessageEntity> = emptyList(),
-    val activeTool: AiToolKind = AiToolKind.SUMMARIZER,
+    val activeTool: AiToolKind = AiToolKind.VIDEO_STUDIO,
     val toolOutput: AiResponse? = null,
     val toolComparisons: Map<AiEngine, AiResponse> = emptyMap(),
     val isRunningTool: Boolean = false,
+    val statusNotice: String? = null,
     val errorMessage: String? = null
 )
 
@@ -69,9 +74,9 @@ private data class WorkspaceCollections(
 private data class SecondaryCollections(
     val tasks: List<PlannerTaskEntity>,
     val memories: List<MemoryEntryEntity>,
+    val creatorPacks: List<CreatorPackEntity>,
     val artifacts: List<ChatMessageEntity>,
-    val streamingReply: String?,
-    val isGenerating: Boolean
+    val streamingReply: String?
 )
 
 private data class ToolCollections(
@@ -79,7 +84,7 @@ private data class ToolCollections(
     val toolOutput: AiResponse?,
     val toolComparisons: Map<AiEngine, AiResponse>,
     val isRunningTool: Boolean,
-    val errorMessage: String?
+    val isGenerating: Boolean
 )
 
 class JarvisViewModel(
@@ -89,9 +94,10 @@ class JarvisViewModel(
     private val _selectedConversationId = MutableStateFlow<Long?>(null)
     private val _streamingReply = MutableStateFlow<String?>(null)
     private val _isGenerating = MutableStateFlow(false)
+    private val _statusNotice = MutableStateFlow<String?>(null)
     private val _errorMessage = MutableStateFlow<String?>(null)
 
-    private val _activeTool = MutableStateFlow(AiToolKind.SUMMARIZER)
+    private val _activeTool = MutableStateFlow(AiToolKind.VIDEO_STUDIO)
     private val _toolOutput = MutableStateFlow<AiResponse?>(null)
     private val _toolComparisons = MutableStateFlow<Map<AiEngine, AiResponse>>(emptyMap())
     private val _isRunningTool = MutableStateFlow(false)
@@ -124,11 +130,11 @@ class JarvisViewModel(
     private val secondaryFlow = combine(
         repository.plannerTasksFlow,
         repository.memoriesFlow,
+        repository.creatorPacksFlow,
         repository.studioArtifactsFlow,
-        _streamingReply,
-        _isGenerating
-    ) { tasks, memories, artifacts, streaming, generating ->
-        SecondaryCollections(tasks, memories, artifacts, streaming, generating)
+        _streamingReply
+    ) { tasks, memories, packs, artifacts, streaming ->
+        SecondaryCollections(tasks, memories, packs, artifacts, streaming)
     }
 
     private val toolFlow = combine(
@@ -136,9 +142,13 @@ class JarvisViewModel(
         _toolOutput,
         _toolComparisons,
         _isRunningTool,
-        _errorMessage
-    ) { tool, output, comparisons, running, error ->
-        ToolCollections(tool, output, comparisons, running, error)
+        _isGenerating
+    ) { tool, output, comparisons, running, generating ->
+        ToolCollections(tool, output, comparisons, running, generating)
+    }
+
+    private val noticesFlow = combine(_statusNotice, _errorMessage) { notice, error ->
+        notice to error
     }
 
     private val liveEnginesSet: Set<AiEngine> =
@@ -147,8 +157,9 @@ class JarvisViewModel(
     val uiState: StateFlow<JarvisUiState> = combine(
         primaryFlow,
         secondaryFlow,
-        toolFlow
-    ) { primary, secondary, tools ->
+        toolFlow,
+        noticesFlow
+    ) { primary, secondary, tools, (notice, error) ->
         JarvisUiState(
             isLiveAiConnected = repository.isLiveAiConnected,
             liveEngines = liveEnginesSet,
@@ -157,16 +168,18 @@ class JarvisViewModel(
             activeConversationId = primary.activeId,
             messages = primary.messages,
             streamingReply = secondary.streamingReply,
-            isGenerating = secondary.isGenerating,
+            isGenerating = tools.isGenerating,
             missions = primary.missions,
             plannerTasks = secondary.tasks,
             memories = secondary.memories,
+            creatorPacks = secondary.creatorPacks,
             studioArtifacts = secondary.artifacts,
             activeTool = tools.activeTool,
             toolOutput = tools.toolOutput,
             toolComparisons = tools.toolComparisons,
             isRunningTool = tools.isRunningTool,
-            errorMessage = tools.errorMessage
+            statusNotice = notice,
+            errorMessage = error
         )
     }.stateIn(
         scope = viewModelScope,
@@ -179,6 +192,10 @@ class JarvisViewModel(
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    fun clearStatusNotice() {
+        _statusNotice.value = null
     }
 
     fun selectEngine(engine: AiEngine) {
@@ -227,6 +244,63 @@ class JarvisViewModel(
         }
     }
 
+    fun saveCreatorPackFromDraft(draft: CreatorDraftPayload) {
+        viewModelScope.launch {
+            repository.saveCreatorPackFromDraft(draft)
+            _statusNotice.value = "Saved ${draft.platform.label} pack to Studio → Creator"
+        }
+    }
+
+    fun createCreatorPack(platform: CreatorPlatform, topic: String) {
+        val trimmed = topic.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            _isGenerating.value = true
+            try {
+                val state = uiState.value
+                repository.createCreatorPack(
+                    platform = platform,
+                    topic = trimmed,
+                    engine = state.preferences.selectedEngine,
+                    language = state.preferences.preferredLanguage
+                )
+                _statusNotice.value = "Created ${platform.label} production pack"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _errorMessage.value = e.localizedMessage ?: "Could not create creator project."
+            } finally {
+                _isGenerating.value = false
+            }
+        }
+    }
+
+    fun toggleCreatorStep(pack: CreatorPackEntity, stepIndex: Int) {
+        val list = parseMilestones(pack.stepsEncoded).toMutableList()
+        if (stepIndex !in list.indices) return
+        list[stepIndex] = list[stepIndex].copy(isDone = !list[stepIndex].isDone)
+        val allDone = list.isNotEmpty() && list.all { it.isDone }
+        val newStatus = if (allDone) "READY_TO_PUBLISH" else "DRAFT"
+        viewModelScope.launch {
+            repository.updateCreatorPack(
+                pack.copy(
+                    stepsEncoded = encodeMilestones(list),
+                    status = newStatus
+                )
+            )
+        }
+    }
+
+    fun updateCreatorPackStatus(pack: CreatorPackEntity, newStatus: String) {
+        viewModelScope.launch {
+            repository.updateCreatorPack(pack.copy(status = newStatus))
+        }
+    }
+
+    fun deleteCreatorPack(id: Long) {
+        viewModelScope.launch { repository.deleteCreatorPack(id) }
+    }
+
     fun selectConversation(conversationId: Long) {
         _selectedConversationId.value = conversationId
     }
@@ -234,7 +308,7 @@ class JarvisViewModel(
     fun startNewConversation() {
         viewModelScope.launch {
             val id = repository.createConversation(
-                title = "New JARVIS Session",
+                title = "New AIRA Session",
                 languageHint = uiState.value.preferences.preferredLanguage.name
             )
             _selectedConversationId.value = id
@@ -270,7 +344,7 @@ class JarvisViewModel(
                 }
 
                 val currentConv = state.conversations.firstOrNull { it.id == conversationId }
-                val shouldRename = currentConv == null || currentConv.title == "New JARVIS Session"
+                val shouldRename = currentConv == null || currentConv.title == "New AIRA Session" || currentConv.title == "New JARVIS Session"
                 repository.appendUserMessage(conversationId, text, updateTitleIfDefault = shouldRename)
 
                 val activeMemories = if (state.preferences.memoryEnabled) {
@@ -291,7 +365,10 @@ class JarvisViewModel(
                         is AiStreamEvent.Partial -> _streamingReply.value = event.accumulatedText
                         is AiStreamEvent.Completed -> {
                             _streamingReply.value = null
-                            repository.saveJarvisReply(conversationId, event.response)
+                            repository.saveAiraReply(conversationId, event.response)
+                            event.response.creatorDraft?.let { draft ->
+                                repository.saveCreatorPackFromDraft(draft)
+                            }
                         }
                     }
                 }
@@ -299,7 +376,7 @@ class JarvisViewModel(
                 throw e
             } catch (e: Exception) {
                 _streamingReply.value = null
-                _errorMessage.value = e.localizedMessage ?: "Failed to generate JARVIS response."
+                _errorMessage.value = e.localizedMessage ?: "Failed to generate AIRA response."
             } finally {
                 _isGenerating.value = false
                 _streamingReply.value = null
@@ -324,6 +401,7 @@ class JarvisViewModel(
         if (parsed.isEmpty()) return
         viewModelScope.launch {
             repository.importSuggestedTasks(messageId, parsed)
+            _statusNotice.value = "Added ${parsed.size} tasks to Studio Planner"
         }
     }
 
@@ -425,6 +503,14 @@ class JarvisViewModel(
 
     fun setMemoryEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setMemoryEnabled(enabled) }
+    }
+
+    fun setProactiveAssistanceEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setProactiveAssistanceEnabled(enabled) }
+    }
+
+    fun setVoiceAutoSpeak(enabled: Boolean) {
+        viewModelScope.launch { repository.setVoiceAutoSpeak(enabled) }
     }
 
     fun setPreferredLanguage(language: JarvisLanguage) {

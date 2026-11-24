@@ -28,7 +28,7 @@ data class ConversationEntity(
 data class ChatMessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val conversationId: Long,
-    val sender: String, // "USER" or "JARVIS"
+    val sender: String, // "USER" or "AIRA"
     val content: String,
     val codeSnippet: String? = null,
     val codeLanguage: String? = null,
@@ -71,9 +71,25 @@ data class PlannerTaskEntity(
 @Entity(tableName = "memory_entries")
 data class MemoryEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val category: String, // "Preference", "Project", "Style", "Instruction"
+    val category: String, // MemoryLayer label: Core, Long-Term, Project, Contextual, Daily, Knowledge
     val memoryKey: String,
     val memoryValue: String,
     val isEnabled: Boolean = true,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "creator_packs")
+data class CreatorPackEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val platform: String, // CreatorPlatform.name
+    val topic: String,
+    val title: String,
+    val hook: String,
+    val script: String,
+    val captionOrDescription: String,
+    val tagsOrHashtags: String,
+    val stepsEncoded: String, // "done|step;;done|step"
+    val status: String = "DRAFT", // "DRAFT", "READY_TO_PUBLISH", "EXPORTED"
+    val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

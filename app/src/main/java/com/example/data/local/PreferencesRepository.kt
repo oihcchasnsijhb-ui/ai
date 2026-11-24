@@ -18,6 +18,8 @@ private val Context.jarvisDataStore: DataStore<Preferences> by preferencesDataSt
 
 data class JarvisPreferences(
     val memoryEnabled: Boolean = true,
+    val proactiveAssistanceEnabled: Boolean = true,
+    val voiceAutoSpeak: Boolean = false,
     val preferredLanguage: JarvisLanguage = JarvisLanguage.AUTO,
     val personalityTone: JarvisTone = JarvisTone.COMPANION,
     val themeMode: ThemeMode = ThemeMode.DARK,
@@ -27,6 +29,8 @@ data class JarvisPreferences(
 class PreferencesRepository(private val context: Context) {
     private object Keys {
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+        val PROACTIVE_ENABLED = booleanPreferencesKey("proactive_enabled")
+        val VOICE_AUTO_SPEAK = booleanPreferencesKey("voice_auto_speak")
         val PREFERRED_LANGUAGE = stringPreferencesKey("preferred_language")
         val PERSONALITY_TONE = stringPreferencesKey("personality_tone")
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -36,6 +40,8 @@ class PreferencesRepository(private val context: Context) {
     val preferencesFlow: Flow<JarvisPreferences> = context.jarvisDataStore.data.map { prefs ->
         JarvisPreferences(
             memoryEnabled = prefs[Keys.MEMORY_ENABLED] ?: true,
+            proactiveAssistanceEnabled = prefs[Keys.PROACTIVE_ENABLED] ?: true,
+            voiceAutoSpeak = prefs[Keys.VOICE_AUTO_SPEAK] ?: false,
             preferredLanguage = prefs[Keys.PREFERRED_LANGUAGE]?.let { name ->
                 JarvisLanguage.entries.firstOrNull { it.name == name }
             } ?: JarvisLanguage.AUTO,
@@ -53,6 +59,14 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setMemoryEnabled(enabled: Boolean) {
         context.jarvisDataStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
+    }
+
+    suspend fun setProactiveAssistanceEnabled(enabled: Boolean) {
+        context.jarvisDataStore.edit { it[Keys.PROACTIVE_ENABLED] = enabled }
+    }
+
+    suspend fun setVoiceAutoSpeak(enabled: Boolean) {
+        context.jarvisDataStore.edit { it[Keys.VOICE_AUTO_SPEAK] = enabled }
     }
 
     suspend fun setPreferredLanguage(language: JarvisLanguage) {

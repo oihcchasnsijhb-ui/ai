@@ -21,7 +21,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Multi-engine AI repository routing:
+ * Multi-engine AI repository for AIRA routing:
  * - ChatGPT (OpenAI API) when OPENAI_API_KEY is configured in AI Studio Secrets
  * - Claude (Anthropic API) when ANTHROPIC_API_KEY is configured in AI Studio Secrets
  * - Gemini (Firebase AI Logic placeholder until Firebase is enabled)
@@ -75,7 +75,7 @@ class MultiEngineAiRepository(
         }
 
         return flow {
-            emit(AiStreamEvent.Partial("Connecting to ${engine.displayName}…"))
+            emit(AiStreamEvent.Partial("AIRA is thinking via ${engine.displayName}…"))
             val systemPrompt = buildSystemPrompt(activeMemories, language, tone)
             val replyText = withTimeout(50_000L) {
                 when (engine) {
@@ -88,7 +88,7 @@ class MultiEngineAiRepository(
                 AiStreamEvent.Completed(
                     AiResponse(
                         replyText = replyText,
-                        agentsUsed = listOf(SpecialistAgent.MANAGER),
+                        agentsUsed = listOf(SpecialistAgent.AIRA_CORE),
                         engineUsed = engine,
                         isPlaceholder = false
                     )
@@ -109,23 +109,23 @@ class MultiEngineAiRepository(
         }
 
         val squadNames = agents.joinToString(", ") { it.displayName }
-        val systemPrompt = "You are JARVIS Manager AI coordinating: $squadNames. Reply concisely in ${language.label} with an actionable team brief."
+        val systemPrompt = "You are AIRA Core following UNDERSTAND -> PLAN -> DELEGATE -> EXECUTE -> VERIFY -> DELIVER across: $squadNames. Reply concisely in ${language.label} and be honest about what requires external tool authorization."
         val text = withTimeout(50_000L) {
             when (engine) {
-                AiEngine.CHATGPT -> callOpenAi(systemPrompt, "Create a multi-agent execution plan for: $goal", emptyList())
-                AiEngine.CLAUDE -> callAnthropic(systemPrompt, "Create a multi-agent execution plan for: $goal", emptyList())
+                AiEngine.CHATGPT -> callOpenAi(systemPrompt, "Create an execution plan for: $goal", emptyList())
+                AiEngine.CLAUDE -> callAnthropic(systemPrompt, "Create an execution plan for: $goal", emptyList())
                 AiEngine.GEMINI -> error("Gemini requires Firebase AI Logic.")
             }
         }
         return AiResponse(
             replyText = text,
-            agentsUsed = agents.ifEmpty { listOf(SpecialistAgent.MANAGER, SpecialistAgent.PLANNER) },
+            agentsUsed = agents.ifEmpty { listOf(SpecialistAgent.AIRA_CORE, SpecialistAgent.RESEARCH) },
             engineUsed = engine,
             suggestedMilestones = listOf(
-                "Define scope & success criteria",
-                "Research & architecture check",
-                "Build primary deliverable",
-                "Security & QA verification"
+                "UNDERSTAND & PLAN: Define scope",
+                "DELEGATE: Assign specialist tasks",
+                "EXECUTE: Build deliverable",
+                "VERIFY & DELIVER: Audit & ship"
             ),
             isPlaceholder = false
         )
@@ -143,12 +143,13 @@ class MultiEngineAiRepository(
         }
 
         val instruction = when (tool) {
+            AiToolKind.VIDEO_STUDIO -> "You are AIRA Video Agent & Social Media Agent. Create a complete $option production pack (Title, 5-sec Hook, Scene-by-Scene Script, Caption/Description, and Tags/Hashtags) in ${language.label}."
             AiToolKind.SUMMARIZER -> "Summarize the text below using format '$option'. Language: ${language.label}."
             AiToolKind.TRANSLATOR -> "Translate the text below into $option accurately and naturally."
             AiToolKind.CODE_STUDIO -> "Perform '$option' on the following coding request. Include clean code."
             AiToolKind.WRITER -> "Draft a clear, well-toned $option message for the following request. Language: ${language.label}."
             AiToolKind.PROMPT_LAB -> "Expand this idea into a detailed $option creative prompt and brief."
-            AiToolKind.COMPARE -> "Respond concisely and clearly to this prompt."
+            AiToolKind.COMPARE -> "Respond concisely and clearly as AIRA."
         }
 
         val resultText = withTimeout(50_000L) {
@@ -159,15 +160,36 @@ class MultiEngineAiRepository(
             }
         }
 
+        val creatorDraft = if (tool == AiToolKind.VIDEO_STUDIO) {
+            val platform = when {
+                option.contains("Shorts", ignoreCase = true) -> CreatorPlatform.YOUTUBE_SHORTS
+                option.contains("Reel", ignoreCase = true) && !option.contains("YouTube", ignoreCase = true) ->
+                    CreatorPlatform.INSTAGRAM_REEL
+                else -> CreatorPlatform.YOUTUBE_VIDEO
+            }
+            CreatorDraftPayload(
+                platform = platform,
+                topic = input.take(64),
+                title = "${input.take(48)} ($option)",
+                hook = "See full generated script below",
+                script = resultText,
+                captionOrDescription = resultText.take(240),
+                tagsOrHashtags = "#AIRA #Creator"
+            )
+        } else {
+            null
+        }
+
         return AiResponse(
             replyText = resultText,
-            agentsUsed = listOf(SpecialistAgent.ANALYST),
+            agentsUsed = listOf(SpecialistAgent.AIRA_CORE, SpecialistAgent.ANALYSIS),
             engineUsed = engine,
             draftPayload = if (tool == AiToolKind.WRITER) {
                 DraftPayload(channel = option, recipient = "Contact / Team", body = resultText)
             } else {
                 null
             },
+            creatorDraft = creatorDraft,
             isPlaceholder = false
         )
     }
@@ -192,7 +214,7 @@ class MultiEngineAiRepository(
                     Log.e(TAG, "Compare failed for ${engine.name}", e)
                     AiResponse(
                         replyText = "Error from ${engine.displayName}: ${e.localizedMessage ?: "Request failed."}",
-                        agentsUsed = listOf(SpecialistAgent.ANALYST),
+                        agentsUsed = listOf(SpecialistAgent.ANALYSIS),
                         engineUsed = engine,
                         isPlaceholder = !isEngineLive(engine)
                     )
@@ -296,9 +318,9 @@ class MultiEngineAiRepository(
         val memText = if (memories.isEmpty()) {
             ""
         } else {
-            "\nUser memory:\n" + memories.joinToString("\n") { "- ${it.memoryKey}: ${it.memoryValue}" }
+            "\nActive Memory Layers:\n" + memories.joinToString("\n") { "- [${it.category}] ${it.memoryKey}: ${it.memoryValue}" }
         }
-        return "You are JARVIS, an intelligent, warm, helpful AI companion and software/creative assistant. Tone: ${tone.label} (${tone.subtitle}). Preferred language: ${language.label}.$memText"
+        return "You are AIRA (Autonomous Intelligent Responsive Assistant), a warm, witty, emotionally aware AI companion, software engineer, video creator, and 11-agent team leader. Be honest that you are an AI and never fabricate tool access or completed actions. Tone: ${tone.label} (${tone.subtitle}). Preferred language: ${language.label}.$memText"
     }
 
     companion object {

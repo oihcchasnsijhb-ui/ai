@@ -122,6 +122,14 @@ fun JarvisApp() {
         }
     }
 
+    LaunchedEffect(uiState.statusNotice) {
+        val notice = uiState.statusNotice
+        if (!notice.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(notice)
+            viewModel.clearStatusNotice()
+        }
+    }
+
     val onNavigate: (String) -> Unit = { route ->
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) {
@@ -218,7 +226,8 @@ fun JarvisApp() {
                                 uiState = uiState,
                                 onSelectEngine = viewModel::selectEngine,
                                 onSelectTool = viewModel::selectTool,
-                                onRunTool = viewModel::runAiTool
+                                onRunTool = viewModel::runAiTool,
+                                onSaveCreatorDraft = viewModel::saveCreatorPackFromDraft
                             )
                         }
                         composable(ROUTE_AGENTS) {
@@ -235,13 +244,18 @@ fun JarvisApp() {
                                 uiState = uiState,
                                 onAddTask = viewModel::addPlannerTask,
                                 onToggleTask = viewModel::togglePlannerTask,
-                                onDeleteTask = viewModel::deletePlannerTask
+                                onDeleteTask = viewModel::deletePlannerTask,
+                                onCreateCreatorPack = viewModel::createCreatorPack,
+                                onToggleCreatorStep = viewModel::toggleCreatorStep,
+                                onDeleteCreatorPack = viewModel::deleteCreatorPack
                             )
                         }
                         composable(ROUTE_CORE) {
                             CoreMemoryScreen(
                                 uiState = uiState,
                                 onToggleGlobalMemory = viewModel::setMemoryEnabled,
+                                onToggleProactive = viewModel::setProactiveAssistanceEnabled,
+                                onToggleVoiceAutoSpeak = viewModel::setVoiceAutoSpeak,
                                 onAddMemory = viewModel::addMemory,
                                 onToggleMemoryEntry = viewModel::toggleMemoryEntry,
                                 onDeleteMemoryEntry = viewModel::deleteMemoryEntry,

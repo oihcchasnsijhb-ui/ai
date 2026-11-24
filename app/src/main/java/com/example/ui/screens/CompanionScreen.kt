@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -30,10 +37,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,6 +62,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +74,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -70,6 +82,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.ai.AiEngine
 import com.example.data.ai.JarvisLanguage
@@ -81,6 +94,7 @@ import com.example.ui.components.AiEngineSelectorStrip
 import com.example.ui.components.CodeBlockCard
 import com.example.ui.components.DraftConfirmationCard
 import com.example.ui.components.FirebasePlaceholderBanner
+import com.example.ui.voice.VoiceAssistantHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,16 +111,45 @@ fun CompanionScreen(
     onSelectEngine: (AiEngine) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var inputText by rememberSaveable { mutableStateOf("") }
     var showHistorySheet by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val selectedEngine = uiState.preferences.selectedEngine
     val isEngineLive = selectedEngine in uiState.liveEngines
 
+    val voiceHelper = remember(context) { VoiceAssistantHelper(context) }
+    val isSpeaking by voiceHelper.isSpeaking.collectAsStateWithLifecycle()
+
+    DisposableEffect(voiceHelper) {
+        onDispose { voiceHelper.release() }
+    }
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+            if (!spoken.isNullOrBlank()) {
+                inputText = spoken
+            }
+        }
+    }
+
     LaunchedEffect(uiState.messages.size, uiState.streamingReply) {
         val total = uiState.messages.size + if (uiState.streamingReply != null) 1 else 0
         if (total > 0) {
             listState.animateScrollToItem(total - 1)
+        }
+    }
+
+    LaunchedEffect(uiState.messages.lastOrNull()?.id) {
+        val last = uiState.messages.lastOrNull()
+        if (uiState.preferences.voiceAutoSpeak && last != null && last.sender != "USER") {
+            voiceHelper.speak(last.content)
         }
     }
 
@@ -151,7 +194,7 @@ fun CompanionScreen(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.img_jarvis_avatar),
-                        contentDescription = stringResource(R.string.cd_jarvis_avatar),
+                        contentDescription = stringResource(R.string.cd_aira_avatar),
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape),
@@ -163,7 +206,7 @@ fun CompanionScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "JARVIS",
+                                text = "AIRA",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -196,6 +239,20 @@ fun CompanionScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (isSpeaking) {
+                        IconButton(
+                            onClick = { voiceHelper.stop() },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("stop_tts_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Stop,
+                                contentDescription = stringResource(R.string.cd_stop_speaking),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { showHistorySheet = true },
                         modifier = Modifier
@@ -283,6 +340,8 @@ fun CompanionScreen(
                     item {
                         CompanionWelcomeCard(
                             selectedEngine = selectedEngine,
+                            proactiveEnabled = uiState.preferences.proactiveAssistanceEnabled,
+                            pendingTasksCount = uiState.plannerTasks.count { !it.isCompleted },
                             onPromptClick = { prompt -> onSendMessage(prompt) }
                         )
                     }
@@ -291,6 +350,7 @@ fun CompanionScreen(
                 items(uiState.messages, key = { it.id }) { msg ->
                     ChatMessageItem(
                         message = msg,
+                        onSpeak = { voiceHelper.speak(msg.content) },
                         onConfirmDraft = { edited -> onConfirmDraft(msg.id, edited) },
                         onDiscardDraft = { onDiscardDraft(msg.id, msg.draftBody.orEmpty()) },
                         onImportTasks = { onImportSuggestedTasks(msg.id, msg.suggestedTasksEncoded) }
@@ -299,7 +359,7 @@ fun CompanionScreen(
 
                 if (uiState.streamingReply != null) {
                     item(key = "streaming_bubble") {
-                        StreamingJarvisBubble(
+                        StreamingAiraBubble(
                             engine = selectedEngine,
                             text = uiState.streamingReply
                         )
@@ -307,7 +367,7 @@ fun CompanionScreen(
                 }
             }
 
-            // Compact, IME-friendly Composer Bar
+            // Compact, Voice + IME-friendly Composer Bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
@@ -317,10 +377,46 @@ fun CompanionScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    IconButton(
+                        onClick = {
+                            val langTag = if (uiState.preferences.preferredLanguage == JarvisLanguage.HINDI) {
+                                "hi-IN"
+                            } else {
+                                "en-US"
+                            }
+                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                putExtra(
+                                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                                )
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to AIRA in Hindi or English")
+                            }
+                            try {
+                                speechLauncher.launch(intent)
+                            } catch (_: ActivityNotFoundException) {
+                                Toast.makeText(
+                                    context,
+                                    "Voice input service unavailable on this device.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("voice_input_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = stringResource(R.string.cd_voice_input),
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
@@ -341,6 +437,7 @@ fun CompanionScreen(
                         keyboardActions = KeyboardActions(onSend = { sendCurrentMessage() }),
                         shape = MaterialTheme.shapes.large
                     )
+
                     FilledIconButton(
                         onClick = sendCurrentMessage,
                         enabled = inputText.isNotBlank() && !uiState.isGenerating,
@@ -376,7 +473,7 @@ fun CompanionScreen(
                 )
                 if (uiState.conversations.isEmpty()) {
                     Text(
-                        text = "No saved conversations yet. Send a message to start your first JARVIS session.",
+                        text = "No saved conversations yet. Say hi to start your first AIRA session!",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp)
@@ -437,13 +534,15 @@ fun CompanionScreen(
 @Composable
 private fun CompanionWelcomeCard(
     selectedEngine: AiEngine,
+    proactiveEnabled: Boolean,
+    pendingTasksCount: Int,
     onPromptClick: (String) -> Unit
 ) {
     val starters = listOf(
         "आज मेरा पूरा दिन प्लान कर दो।",
+        "Make a YouTube video + Instagram Reel about AI tools",
         "Build a clean Kotlin architecture for an offline-first app",
-        "Draft a friendly WhatsApp update for my team",
-        "Launch an online store project with the multi-agent team"
+        "Draft a friendly WhatsApp update for my team"
     )
 
     Card(
@@ -464,7 +563,7 @@ private fun CompanionWelcomeCard(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.img_jarvis_avatar),
-                    contentDescription = stringResource(R.string.cd_jarvis_avatar),
+                    contentDescription = stringResource(R.string.cd_aira_avatar),
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape),
@@ -472,22 +571,37 @@ private fun CompanionWelcomeCard(
                 )
                 Column {
                     Text(
-                        text = "Hey! I'm JARVIS.",
+                        text = "Hey! I'm AIRA.",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Engine: ${selectedEngine.displayName} • Gemini, Claude & ChatGPT Ready",
+                        text = "Autonomous Intelligent Responsive Assistant • ${selectedEngine.displayName}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
             Text(
-                text = "Switch effortlessly between Gemini, Claude, and ChatGPT above, or open the AI Tools tab for Summarizer, Translator, Code Studio, Writer, and Side-by-Side Model Compare.",
+                text = "Your friendly companion, 6-layer memory brain, 11-agent team leader, software architect, and YouTube/Instagram creator partner. Talk or type in Hindi, Hinglish, or English!",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            if (proactiveEnabled && pendingTasksCount > 0) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                ) {
+                    Text(
+                        text = "Proactive Note: You have $pendingTasksCount pending task(s) in Studio Planner today.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
             Text(
                 text = "QUICK COMMANDS",
                 style = MaterialTheme.typography.labelMedium,
@@ -518,6 +632,7 @@ private fun CompanionWelcomeCard(
 @Composable
 private fun ChatMessageItem(
     message: ChatMessageEntity,
+    onSpeak: () -> Unit,
     onConfirmDraft: (String) -> Unit,
     onDiscardDraft: () -> Unit,
     onImportTasks: () -> Unit
@@ -530,7 +645,7 @@ private fun ChatMessageItem(
         Surface(
             modifier = Modifier
                 .widthIn(max = 580.dp)
-                .testTag(if (isUser) "user_message_${message.id}" else "jarvis_message_${message.id}"),
+                .testTag(if (isUser) "user_message_${message.id}" else "aira_message_${message.id}"),
             shape = RoundedCornerShape(
                 topStart = 18.dp,
                 topEnd = 18.dp,
@@ -552,10 +667,30 @@ private fun ChatMessageItem(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (!isUser) {
-                    AgentBadgeRow(
-                        agentNamesCsv = message.agentsInvolved,
-                        engineName = message.engineName
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        AgentBadgeRow(
+                            agentNamesCsv = message.agentsInvolved,
+                            engineName = message.engineName,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = onSpeak,
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("speak_message_${message.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = stringResource(R.string.cd_read_aloud),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
 
                 Text(
@@ -637,26 +772,26 @@ private fun ChatMessageItem(
 }
 
 @Composable
-private fun StreamingJarvisBubble(
+private fun StreamingAiraBubble(
     engine: AiEngine,
     text: String
 ) {
     Surface(
         modifier = Modifier
             .widthIn(max = 580.dp)
-            .testTag("streaming_jarvis_bubble"),
+            .testTag("streaming_aira_bubble"),
         shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "${engine.displayName.uppercase()} STREAMING…",
+                text = "AIRA (${engine.displayName.uppercase()}) STREAMING…",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = text.ifBlank { "Thinking across ${engine.displayName}…" },
+                text = text.ifBlank { "Thinking with ${engine.displayName}…" },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )

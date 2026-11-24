@@ -1,6 +1,6 @@
 {
-  "name": "JARVIS",
-  "description": "Autonomous AI companion, multi-agent task orchestrator, software engineering assistant, and personal planner with persistent memory.",
+  "name": "AIRA",
+  "description": "AIRA (Autonomous Intelligent Responsive Assistant) — personal AI companion, multi-engine chat (Gemini, Claude, ChatGPT), 6-layer memory, voice assistant, video/social studio, and 11-agent task manager.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

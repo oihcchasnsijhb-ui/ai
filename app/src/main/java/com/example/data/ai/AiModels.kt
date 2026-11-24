@@ -32,6 +32,12 @@ enum class AiToolKind(
     val defaultOption: String,
     val options: List<String>
 ) {
+    VIDEO_STUDIO(
+        title = "Video & Social Studio",
+        subtitle = "YouTube, Shorts & Instagram Reels packs",
+        defaultOption = "YouTube + Reel",
+        options = listOf("YouTube + Reel", "YouTube Video", "YouTube Shorts", "Instagram Reel")
+    ),
     SUMMARIZER(
         title = "Smart Summarizer",
         subtitle = "Condense articles, notes & chats",
@@ -58,9 +64,9 @@ enum class AiToolKind(
     ),
     PROMPT_LAB(
         title = "Creative & Image Lab",
-        subtitle = "Craft detailed art & video prompts",
-        defaultOption = "Cinematic Visual",
-        options = listOf("Cinematic Visual", "App UI Concept", "Reels Script")
+        subtitle = "Craft detailed art & thumbnail prompts",
+        defaultOption = "Thumbnail Visual",
+        options = listOf("Thumbnail Visual", "Cinematic Video", "App UI Concept")
     ),
     COMPARE(
         title = "Compare All 3 AIs",
@@ -70,55 +76,84 @@ enum class AiToolKind(
     )
 }
 
+enum class MemoryLayer(
+    val label: String,
+    val description: String
+) {
+    CORE("Core", "Preferences, communication style, personal goals & settings"),
+    LONG_TERM("Long-Term", "Important conversations, past decisions & long-term plans"),
+    PROJECT("Project", "Project specs, architecture, bugs & pending milestones"),
+    CONTEXTUAL("Contextual", "Active context connecting ongoing conversations"),
+    DAILY("Daily", "Daily summaries, routines, events & progress"),
+    KNOWLEDGE("Knowledge", "Research notes, tutorials, references & facts")
+}
+
+enum class CreatorPlatform(val label: String) {
+    YOUTUBE_VIDEO("YouTube Video"),
+    YOUTUBE_SHORTS("YouTube Shorts"),
+    INSTAGRAM_REEL("Instagram Reel"),
+    INSTAGRAM_CAROUSEL("Instagram Post")
+}
+
 enum class SpecialistAgent(
     val displayName: String,
     val roleSummary: String,
     val badgeCode: String
 ) {
-    MANAGER(
-        displayName = "Manager AI",
-        roleSummary = "Coordinates the specialist team, monitors milestones, and merges final deliverables.",
-        badgeCode = "MGR"
-    ),
-    PLANNER(
-        displayName = "Planner AI",
-        roleSummary = "Breaks complex objectives into actionable steps, timelines, and daily schedules.",
-        badgeCode = "PLN"
+    AIRA_CORE(
+        displayName = "AIRA Core",
+        roleSummary = "Main intelligence, warm companion dialogue, planning, and task coordination.",
+        badgeCode = "AIRA"
     ),
     RESEARCH(
-        displayName = "Research AI",
-        roleSummary = "Gathers facts, compares options, and synthesizes multi-source findings.",
+        displayName = "Research Agent",
+        roleSummary = "Researches topics, compares options, gathers references, and verifies facts.",
         badgeCode = "RSC"
     ),
     CODING(
-        displayName = "Coding AI",
-        roleSummary = "Architects, writes, reviews, and debugs clean production software.",
+        displayName = "Coding Agent",
+        roleSummary = "Architects, writes, reviews, and debugs apps, websites, APIs, and scripts.",
         badgeCode = "DEV"
     ),
-    CREATIVE(
-        displayName = "Creative AI",
-        roleSummary = "Crafts UI concepts, stories, scripts, logos, and campaign ideas.",
-        badgeCode = "CRT"
+    VIDEO(
+        displayName = "Video Agent",
+        roleSummary = "Produces hooks, scripts, visual scene lists, voice-over cues, and edit plans.",
+        badgeCode = "VID"
     ),
-    ANALYST(
-        displayName = "Analyst AI",
-        roleSummary = "Evaluates trade-offs, metrics, opportunities, and edge cases.",
+    SOCIAL_MEDIA(
+        displayName = "Social Media Agent",
+        roleSummary = "Prepares YouTube titles, descriptions, tags, Instagram captions, and hashtags.",
+        badgeCode = "SOC"
+    ),
+    DESIGN(
+        displayName = "Design Agent",
+        roleSummary = "Designs UI concepts, logos, thumbnails, graphics, and creative visual direction.",
+        badgeCode = "DSN"
+    ),
+    ANALYSIS(
+        displayName = "Analysis Agent",
+        roleSummary = "Evaluates trade-offs, performance metrics, options, and recommendations.",
         badgeCode = "ANL"
     ),
     SECURITY(
-        displayName = "Security AI",
-        roleSummary = "Audits permissions, privacy boundaries, credentials, and operational risks.",
+        displayName = "Security Agent",
+        roleSummary = "Audits permissions, privacy, credentials, policies, and high-impact actions.",
         badgeCode = "SEC"
     ),
     TESTING(
-        displayName = "Testing AI",
-        roleSummary = "Verifies functionality, checks quality, and catches regressions.",
+        displayName = "Testing Agent",
+        roleSummary = "Tests code, content workflows, edge cases, and final deliverable quality.",
         badgeCode = "TST"
     ),
-    COMMUNICATION(
-        displayName = "Communication AI",
-        roleSummary = "Drafts messages, emails, replies, and posts with confirmation gating.",
-        badgeCode = "COM"
+    EXECUTION(
+        displayName = "Execution Agent",
+        roleSummary = "Runs connected tools, share flows, and authorized workflows step-by-step.",
+        badgeCode = "EXE"
+    ),
+    MEMORY(
+        displayName = "Memory Agent",
+        roleSummary = "Indexes 6-layer memories, retrieves past context, and tracks project continuity.",
+        badgeCode = "MEM"
     )
 }
 
@@ -130,15 +165,25 @@ enum class JarvisLanguage(val label: String) {
 }
 
 enum class JarvisTone(val label: String, val subtitle: String) {
-    COMPANION("Warm Companion", "Friendly, witty, emotionally perceptive"),
-    ENGINEER("Lead Engineer", "Direct, architectural, code-first"),
-    STRATEGIST("Chief Strategist", "Structured, decisive, multi-agent")
+    COMPANION("Friendly Companion", "Warm, playful, supportive & emotionally aware"),
+    ENGINEER("Tech Architect", "Direct, clean code & system design focused"),
+    STRATEGIST("Chief Coordinator", "Decisive, multi-agent & execution driven")
 }
 
 data class DraftPayload(
     val channel: String,
     val recipient: String,
     val body: String
+)
+
+data class CreatorDraftPayload(
+    val platform: CreatorPlatform,
+    val topic: String,
+    val title: String,
+    val hook: String,
+    val script: String,
+    val captionOrDescription: String,
+    val tagsOrHashtags: String
 )
 
 data class AiResponse(
@@ -148,6 +193,7 @@ data class AiResponse(
     val codeSnippet: String? = null,
     val codeLanguage: String? = null,
     val draftPayload: DraftPayload? = null,
+    val creatorDraft: CreatorDraftPayload? = null,
     val suggestedPlannerTasks: List<Pair<String, String>> = emptyList(),
     val suggestedMilestones: List<String> = emptyList(),
     val isPlaceholder: Boolean = true

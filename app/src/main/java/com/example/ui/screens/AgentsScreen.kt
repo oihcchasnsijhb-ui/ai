@@ -104,7 +104,7 @@ fun AgentsScreen(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.img_jarvis_core_banner),
-                        contentDescription = stringResource(R.string.cd_jarvis_banner),
+                        contentDescription = stringResource(R.string.cd_aira_banner),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -126,28 +126,29 @@ fun AgentsScreen(
                             .padding(16.dp)
                     ) {
                         Text(
-                            text = "Multi-Agent AI Team",
+                            text = "AIRA 11-Agent Team",
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "9 autonomous specialists coordinated by Manager AI",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "UNDERSTAND → PLAN → DELEGATE → EXECUTE → VERIFY → DELIVER",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             }
 
-            if (!uiState.isLiveAiConnected) {
-                item {
-                    FirebasePlaceholderBanner()
-                }
+            item {
+                FirebasePlaceholderBanner(
+                    selectedEngine = uiState.preferences.selectedEngine,
+                    isSelectedEngineLive = uiState.preferences.selectedEngine in uiState.liveEngines
+                )
             }
 
             item {
                 Text(
-                    text = "SPECIALIST ROSTER",
+                    text = "SPECIALIST AGENTS (${SpecialistAgent.entries.size})",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
@@ -161,7 +162,7 @@ fun AgentsScreen(
                     SpecialistAgent.entries.forEach { agent ->
                         Card(
                             modifier = Modifier
-                                .width(172.dp)
+                                .width(176.dp)
                                 .clickable { inspectedAgent = agent }
                                 .testTag("agent_card_${agent.name.lowercase()}"),
                             colors = CardDefaults.cardColors(
@@ -258,7 +259,7 @@ fun AgentsScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Assign a complex goal like launching an online store, researching a topic, or auditing code to coordinate JARVIS's specialist squad.",
+                                text = "Assign a goal like producing a YouTube + Instagram Reel series, building an app, or researching competitors across AIRA's 11-agent squad.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -300,10 +301,11 @@ fun AgentsScreen(
         var goal by remember { mutableStateOf("") }
         val selectedAgents = remember {
             mutableStateListOf(
-                SpecialistAgent.MANAGER,
-                SpecialistAgent.PLANNER,
-                SpecialistAgent.CODING,
-                SpecialistAgent.SECURITY
+                SpecialistAgent.AIRA_CORE,
+                SpecialistAgent.RESEARCH,
+                SpecialistAgent.VIDEO,
+                SpecialistAgent.SOCIAL_MEDIA,
+                SpecialistAgent.CODING
             )
         }
 
@@ -315,7 +317,7 @@ fun AgentsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Assign Multi-Agent Mission",
+                    text = "Assign 11-Agent Mission",
                     style = MaterialTheme.typography.headlineSmall
                 )
                 OutlinedTextField(
@@ -331,14 +333,14 @@ fun AgentsScreen(
                     value = goal,
                     onValueChange = { goal = it },
                     label = { Text("Goal or Objective") },
-                    placeholder = { Text("e.g., Build and launch an online store MVP") },
+                    placeholder = { Text("e.g., Make a YouTube video + Instagram Reel about AI") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("mission_goal_input"),
                     minLines = 2
                 )
                 Text(
-                    text = "Select AI Team Members",
+                    text = "Select Specialist Agents",
                     style = MaterialTheme.typography.labelLarge
                 )
                 Row(
@@ -372,7 +374,7 @@ fun AgentsScreen(
                         .minimumInteractiveComponentSize()
                         .testTag("confirm_launch_mission_button")
                 ) {
-                    Text("Deploy Agent Squad")
+                    Text("Deploy AIRA Squad")
                 }
                 Spacer(Modifier.height(20.dp))
             }
@@ -483,7 +485,7 @@ private fun MissionCard(
             if (milestones.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "MILESTONES",
+                        text = "PROTOCOL MILESTONES",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.secondary
                     )

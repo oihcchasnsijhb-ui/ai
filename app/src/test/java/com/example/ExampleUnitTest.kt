@@ -3,8 +3,10 @@ package com.example
 import com.example.data.ai.AiEngine
 import com.example.data.ai.AiStreamEvent
 import com.example.data.ai.AiToolKind
+import com.example.data.ai.CreatorPlatform
 import com.example.data.ai.JarvisLanguage
 import com.example.data.ai.JarvisTone
+import com.example.data.ai.MemoryLayer
 import com.example.data.ai.PlaceholderAiRepository
 import com.example.data.ai.SpecialistAgent
 import com.example.ui.JarvisViewModel
@@ -18,6 +20,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExampleUnitTest {
+
+    @Test
+    fun airaModels_exposeAllElevenAgentsAndSixMemoryLayers() {
+        assertEquals(11, SpecialistAgent.entries.size)
+        assertEquals(6, MemoryLayer.entries.size)
+        assertTrue(SpecialistAgent.entries.contains(SpecialistAgent.AIRA_CORE))
+        assertTrue(SpecialistAgent.entries.contains(SpecialistAgent.VIDEO))
+        assertTrue(SpecialistAgent.entries.contains(SpecialistAgent.SOCIAL_MEDIA))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.CORE))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.LONG_TERM))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.PROJECT))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.CONTEXTUAL))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.DAILY))
+        assertTrue(MemoryLayer.entries.contains(MemoryLayer.KNOWLEDGE))
+    }
 
     @Test
     fun placeholderAi_streamsLabeledSampleForDrafts() = runTest {
@@ -39,7 +56,7 @@ class ExampleUnitTest {
         assertTrue(completed.replyText.contains("Sample Preview"))
         assertNotNull(completed.draftPayload)
         assertEquals("WhatsApp", completed.draftPayload?.channel)
-        assertTrue(completed.agentsUsed.contains(SpecialistAgent.COMMUNICATION))
+        assertTrue(completed.agentsUsed.contains(SpecialistAgent.SOCIAL_MEDIA))
     }
 
     @Test
@@ -57,12 +74,25 @@ class ExampleUnitTest {
         val completed = events.filterIsInstance<AiStreamEvent.Completed>().single().response
         assertTrue(completed.isPlaceholder)
         assertTrue(completed.suggestedPlannerTasks.isNotEmpty())
-        assertTrue(completed.agentsUsed.contains(SpecialistAgent.PLANNER))
+        assertTrue(completed.agentsUsed.contains(SpecialistAgent.AIRA_CORE))
     }
 
     @Test
-    fun placeholderAi_runsToolsAndComparesAllThreeEngines() = runTest {
+    fun placeholderAi_generatesVideoCreatorPackAndRunsTools() = runTest {
         val repo = PlaceholderAiRepository()
+
+        val videoResult = repo.runAiTool(
+            tool = AiToolKind.VIDEO_STUDIO,
+            engine = AiEngine.GEMINI,
+            input = "AI productivity workflows",
+            option = "YouTube Shorts",
+            language = JarvisLanguage.ENGLISH
+        )
+        assertNotNull(videoResult.creatorDraft)
+        assertEquals(CreatorPlatform.YOUTUBE_SHORTS, videoResult.creatorDraft?.platform)
+        assertTrue(videoResult.agentsUsed.contains(SpecialistAgent.VIDEO))
+        assertTrue(videoResult.agentsUsed.contains(SpecialistAgent.SOCIAL_MEDIA))
+
         val toolResult = repo.runAiTool(
             tool = AiToolKind.TRANSLATOR,
             engine = AiEngine.CHATGPT,

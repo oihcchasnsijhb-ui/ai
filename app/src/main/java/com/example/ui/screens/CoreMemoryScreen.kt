@@ -46,8 +46,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.data.ai.AiEngine
 import com.example.data.ai.JarvisLanguage
 import com.example.data.ai.JarvisTone
+import com.example.data.ai.MemoryLayer
 import com.example.data.local.MemoryEntryEntity
 import com.example.ui.JarvisUiState
 import com.example.ui.components.FirebasePlaceholderBanner
@@ -59,6 +61,8 @@ import com.example.ui.theme.ThemeMode
 fun CoreMemoryScreen(
     uiState: JarvisUiState,
     onToggleGlobalMemory: (Boolean) -> Unit,
+    onToggleProactive: (Boolean) -> Unit,
+    onToggleVoiceAutoSpeak: (Boolean) -> Unit,
     onAddMemory: (String, String, String) -> Unit,
     onToggleMemoryEntry: (MemoryEntryEntity) -> Unit,
     onDeleteMemoryEntry: (Long) -> Unit,
@@ -68,6 +72,15 @@ fun CoreMemoryScreen(
     modifier: Modifier = Modifier
 ) {
     var showAddMemorySheet by remember { mutableStateOf(false) }
+    var activeLayerFilter by remember { mutableStateOf<MemoryLayer?>(null) }
+
+    val filteredMemories = remember(uiState.memories, activeLayerFilter) {
+        if (activeLayerFilter == null) {
+            uiState.memories
+        } else {
+            uiState.memories.filter { it.category.equals(activeLayerFilter?.label, ignoreCase = true) }
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -81,10 +94,17 @@ fun CoreMemoryScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Text(
-                    text = "Memory & Core",
-                    style = MaterialTheme.typography.headlineMedium
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "AIRA Memory & Core",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Text(
+                        text = "6-Layer Permanent Memory System, Voice Assistant & Connected Engines",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             item {
@@ -109,7 +129,7 @@ fun CoreMemoryScreen(
                             text = "Connected AI Engines",
                             style = MaterialTheme.typography.titleMedium
                         )
-                        com.example.data.ai.AiEngine.entries.forEach { engine ->
+                        AiEngine.entries.forEach { engine ->
                             val isLive = engine in uiState.liveEngines
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -124,8 +144,8 @@ fun CoreMemoryScreen(
                                     Text(
                                         text = when {
                                             isLive -> "${engine.modelLabel} connected"
-                                            engine == com.example.data.ai.AiEngine.GEMINI -> "Needs Firebase AI Logic enabled"
-                                            engine == com.example.data.ai.AiEngine.CLAUDE -> "Set ANTHROPIC_API_KEY in AI Studio Secrets"
+                                            engine == AiEngine.GEMINI -> "Needs Firebase AI Logic enabled"
+                                            engine == AiEngine.CLAUDE -> "Set ANTHROPIC_API_KEY in AI Studio Secrets"
                                             else -> "Set OPENAI_API_KEY in AI Studio Secrets"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
@@ -142,42 +162,7 @@ fun CoreMemoryScreen(
                 }
             }
 
-            // Master Memory Control
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Persistent Personalization Memory",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Remember preferences, active projects, and instructions locally on this device.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = uiState.preferences.memoryEnabled,
-                            onCheckedChange = onToggleGlobalMemory,
-                            modifier = Modifier.testTag("global_memory_switch")
-                        )
-                    }
-                }
-            }
-
-            // Personality & Language Controls
+            // Memory, Proactive & Voice Controls
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -188,7 +173,84 @@ fun CoreMemoryScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(text = "Companion Personality", style = MaterialTheme.typography.titleMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("6-Layer Permanent Memory", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Persist Core, Long-Term, Project, Contextual, Daily & Knowledge records locally.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(
+                                checked = uiState.preferences.memoryEnabled,
+                                onCheckedChange = onToggleGlobalMemory,
+                                modifier = Modifier.testTag("global_memory_switch")
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Proactive Daily Assistance", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "Show pending task nudges & project continuity reminders.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(
+                                checked = uiState.preferences.proactiveAssistanceEnabled,
+                                onCheckedChange = onToggleProactive,
+                                modifier = Modifier.testTag("proactive_switch")
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Voice Auto-Read (TTS)", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "Automatically speak AIRA's Hindi & English replies aloud.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(
+                                checked = uiState.preferences.voiceAutoSpeak,
+                                onCheckedChange = onToggleVoiceAutoSpeak,
+                                modifier = Modifier.testTag("voice_autospeak_switch")
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Personality, Language & Theme Controls
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "AIRA Personality", style = MaterialTheme.typography.titleMedium)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -246,36 +308,62 @@ fun CoreMemoryScreen(
                 }
             }
 
-            // Memory Vault Header
+            // 6-Layer Memory Vault Header & Layer Filter
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "MEMORY VAULT (${uiState.memories.size})",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Button(
-                        onClick = { showAddMemorySheet = true },
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .testTag("add_memory_button")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.cd_add_memory),
-                            modifier = Modifier.size(18.dp)
+                        Text(
+                            text = "6-LAYER MEMORY VAULT (${filteredMemories.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text("Add Memory")
+                        Button(
+                            onClick = { showAddMemorySheet = true },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("add_memory_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = stringResource(R.string.cd_add_memory),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Add Memory")
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = activeLayerFilter == null,
+                            onClick = { activeLayerFilter = null },
+                            label = { Text("All Layers") },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        )
+                        MemoryLayer.entries.forEach { layer ->
+                            FilterChip(
+                                selected = activeLayerFilter == layer,
+                                onClick = {
+                                    activeLayerFilter = if (activeLayerFilter == layer) null else layer
+                                },
+                                label = { Text(layer.label) },
+                                modifier = Modifier.minimumInteractiveComponentSize()
+                            )
+                        }
                     }
                 }
             }
 
-            if (uiState.memories.isEmpty()) {
+            if (filteredMemories.isEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -300,7 +388,7 @@ fun CoreMemoryScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Save preferences like your tech stack, active projects, or communication style so JARVIS stays tailored to you. You can toggle or erase any entry anytime.",
+                                text = "Save preferences, project specs, daily wins, or research notes across AIRA's 6 memory layers. You stay in full control to toggle or erase entries anytime.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -308,7 +396,7 @@ fun CoreMemoryScreen(
                     }
                 }
             } else {
-                items(uiState.memories, key = { it.id }) { entry ->
+                items(filteredMemories, key = { it.id }) { entry ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -327,7 +415,7 @@ fun CoreMemoryScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 StatusPill(
-                                    label = entry.category.uppercase(),
+                                    label = "${entry.category.uppercase()} LAYER",
                                     color = if (entry.isEnabled) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
@@ -368,7 +456,7 @@ fun CoreMemoryScreen(
     }
 
     if (showAddMemorySheet) {
-        var category by remember { mutableStateOf("Preference") }
+        var selectedLayer by remember { mutableStateOf(MemoryLayer.CORE) }
         var key by remember { mutableStateOf("") }
         var value by remember { mutableStateOf("") }
 
@@ -379,27 +467,32 @@ fun CoreMemoryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Save Memory Entry", style = MaterialTheme.typography.headlineSmall)
+                Text("Save to AIRA 6-Layer Memory", style = MaterialTheme.typography.headlineSmall)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Preference", "Project", "Style", "Instruction").forEach { cat ->
+                    MemoryLayer.entries.forEach { layer ->
                         FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat) },
+                            selected = selectedLayer == layer,
+                            onClick = { selectedLayer = layer },
+                            label = { Text(layer.label) },
                             modifier = Modifier.minimumInteractiveComponentSize()
                         )
                     }
                 }
+                Text(
+                    text = selectedLayer.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
                     label = { Text("Topic / Key") },
-                    placeholder = { Text("e.g., Preferred Tech Stack") },
+                    placeholder = { Text("e.g., YouTube Niche or Coding Stack") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("memory_key_input"),
@@ -409,7 +502,7 @@ fun CoreMemoryScreen(
                     value = value,
                     onValueChange = { value = it },
                     label = { Text("Detail to Remember") },
-                    placeholder = { Text("e.g., Kotlin, Jetpack Compose, and clean MVVM") },
+                    placeholder = { Text("e.g., Hindi/English AI tech explainers in Kotlin & Compose") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("memory_value_input"),
@@ -418,7 +511,7 @@ fun CoreMemoryScreen(
                 Button(
                     onClick = {
                         if (key.isNotBlank() && value.isNotBlank()) {
-                            onAddMemory(category, key, value)
+                            onAddMemory(selectedLayer.label, key, value)
                             showAddMemorySheet = false
                         }
                     },
@@ -428,7 +521,7 @@ fun CoreMemoryScreen(
                         .minimumInteractiveComponentSize()
                         .testTag("save_memory_button")
                 ) {
-                    Text("Save to Memory Vault")
+                    Text("Save to ${selectedLayer.label} Memory")
                 }
                 Spacer(Modifier.height(20.dp))
             }

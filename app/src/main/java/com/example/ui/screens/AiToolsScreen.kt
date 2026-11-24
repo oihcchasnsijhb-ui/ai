@@ -21,10 +21,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Summarize
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.ai.AiEngine
 import com.example.data.ai.AiToolKind
+import com.example.data.ai.CreatorDraftPayload
 import com.example.ui.JarvisUiState
 import com.example.ui.components.AiEngineSelectorStrip
 import com.example.ui.components.CodeBlockCard
@@ -72,6 +75,7 @@ fun AiToolsScreen(
     onSelectEngine: (AiEngine) -> Unit,
     onSelectTool: (AiToolKind) -> Unit,
     onRunTool: (String, String) -> Unit,
+    onSaveCreatorDraft: (CreatorDraftPayload) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activeTool = uiState.activeTool
@@ -100,11 +104,11 @@ fun AiToolsScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "AI Tools Suite",
+                        text = "AIRA AI Tools",
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Text(
-                        text = "Switch between Gemini, Claude & ChatGPT or compare all 3 side-by-side",
+                        text = "Video/YouTube/Instagram Studio, Summarizer, Translator, Code & Gemini/Claude/ChatGPT Compare",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -128,7 +132,7 @@ fun AiToolsScreen(
                 )
             }
 
-            // Tool Selector Grid / Row
+            // Tool Selector Row
             item {
                 Text(
                     text = "CHOOSE AN AI TOOL",
@@ -145,6 +149,7 @@ fun AiToolsScreen(
                     AiToolKind.entries.forEach { tool ->
                         val isSelected = tool == activeTool
                         val icon = when (tool) {
+                            AiToolKind.VIDEO_STUDIO -> Icons.Filled.MovieCreation
                             AiToolKind.SUMMARIZER -> Icons.Filled.Summarize
                             AiToolKind.TRANSLATOR -> Icons.Filled.Translate
                             AiToolKind.CODE_STUDIO -> Icons.Filled.Code
@@ -154,7 +159,7 @@ fun AiToolsScreen(
                         }
                         Card(
                             modifier = Modifier
-                                .width(168.dp)
+                                .width(172.dp)
                                 .clickable { onSelectTool(tool) }
                                 .testTag("ai_tool_card_${tool.name.lowercase()}"),
                             colors = CardDefaults.cardColors(
@@ -245,11 +250,12 @@ fun AiToolsScreen(
                             label = {
                                 Text(
                                     when (activeTool) {
+                                        AiToolKind.VIDEO_STUDIO -> "Video topic for YouTube / Instagram Reel"
                                         AiToolKind.SUMMARIZER -> "Paste text, notes, or article"
                                         AiToolKind.TRANSLATOR -> "Enter text to translate"
                                         AiToolKind.CODE_STUDIO -> "Describe code or paste error snippet"
-                                        AiToolKind.WRITER -> "What message or email should JARVIS write?"
-                                        AiToolKind.PROMPT_LAB -> "Describe your image, UI, or video idea"
+                                        AiToolKind.WRITER -> "What message or email should AIRA write?"
+                                        AiToolKind.PROMPT_LAB -> "Describe your thumbnail, visual, or UI idea"
                                         AiToolKind.COMPARE -> "Ask one question to Gemini, Claude & ChatGPT"
                                     }
                                 )
@@ -336,6 +342,24 @@ fun AiToolsScreen(
                                     code = result.codeSnippet,
                                     language = result.codeLanguage
                                 )
+                            }
+
+                            result.creatorDraft?.let { creatorDraft ->
+                                Button(
+                                    onClick = { onSaveCreatorDraft(creatorDraft) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("save_creator_pack_from_tool")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.BookmarkAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Save Full Script & Metadata to Studio → Creator")
+                                }
                             }
 
                             result.draftPayload?.let { draft ->
